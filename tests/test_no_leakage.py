@@ -5,6 +5,7 @@ import pandas as pd
 
 from src.data_cleaning import align_fundamentals_by_announcement
 from src.factor_analysis import feature_columns
+from src.feature_selection import numeric_feature_columns
 from src.label_builder import build_labels
 
 
@@ -52,6 +53,27 @@ class NoLeakageTests(unittest.TestCase):
             }
         )
         self.assertEqual(feature_columns(df), ["ret_5d"])
+        self.assertEqual(numeric_feature_columns(df), ["ret_5d"])
+
+    def test_new_trade_labels_are_forward_only(self):
+        prices = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=8, freq="D"),
+                "open": [10, 10, 11, 12, 11, 13, 14, 15],
+                "high": [10, 11, 12, 13, 12, 14, 15, 16],
+                "low": [9, 9, 10, 10, 10, 12, 13, 14],
+                "close": [10, 11, 12, 11, 13, 14, 15, 16],
+                "volume": 1,
+                "amount": 1,
+                "turnover": 1,
+                "pct_change": 0,
+            }
+        )
+        labels = build_labels(prices, horizons=[5])
+        self.assertIn("future_mfe_5d", labels.columns)
+        self.assertIn("future_mae_5d", labels.columns)
+        self.assertIn("y_good_trade_5d", labels.columns)
+        self.assertTrue(pd.isna(labels.loc[7, "future_mfe_5d"]))
 
 
 if __name__ == "__main__":

@@ -201,6 +201,8 @@ def evaluate_factor_pool(
                 "factor": col,
                 "horizon": horizon,
                 "observations": int(len(sample)),
+                "coverage_rate": float(len(sample) / len(merged)) if len(merged) else np.nan,
+                "missing_rate": float(1.0 - len(sample) / len(merged)) if len(merged) else np.nan,
                 "pearson_ic": pearson,
                 "spearman_ic": spearman,
                 "rolling_rank_ic_mean": ric_mean,
@@ -213,6 +215,8 @@ def evaluate_factor_pool(
                 "low_turnover_score": low_turnover,
                 "explainability_score": interpret,
                 "factor_score": total,
+                "suitable_for_model": bool(total >= 0.55 and pred_score > 0.2 and stability > 0.35),
+                "overfit_risk": "high" if stable_sign < 0.45 or mono < 0.3 else ("medium" if non_redundancy < 0.2 else "low"),
             }
         )
 

@@ -1,18 +1,49 @@
-# 300316.SZ 单票量化预测与交易参考系统
+# 300316.SZ 晶盛机电单票量化研究系统
 
-本项目围绕晶盛机电 `300316.SZ` 建立日线级别的可复现研究闭环：数据适配、清洗、特征/标签、因子评价、walk-forward 模型、交易信号、含成本回测和报告输出。
+本项目围绕 A 股创业板 `300316.SZ` 晶盛机电建立日线级别研究闭环：数据适配、清洗、特征/标签、因子研究、walk-forward 模型、信号生成、扣成本回测、稳健性验证和最终评级。
 
-核心原则：如果样本外预测和扣成本回测不稳定，报告必须给出“仅供观察”或“不可用”，不能为了得到好看的曲线强行调参。
+核心原则：结论服从证据。如果样本外预测、扣成本回测、回撤控制或稳健性不足，报告必须给出 `B. 仅供观察` 或 `C. 不可用`，不能为了得到好看的收益曲线而调参、泄漏未来或伪造缺失数据。
+
+## 当前结论
+
+第二阶段复跑数据区间：`2018-01-02` 至 `2026-06-09`，共 2044 个交易日。
+
+- 最终评级：`C. 不可用`
+- 最新信号日期：`2026-06-09`
+- 最新 `signal_label`：`risk_off`
+- 最新 `target_position`：`0.0`
+- 关键原因：5/20 日预测虽出现正 RankIC，但模型信号扣成本后总收益 `-1.22%`，显著弱于买入持有 `+231.15%`；风险分数为 `1.0`，最新信号触发风险过滤。
+- 不升级评级原因：缺少指数、行业、财务、事件、产业链与盘口可成交性数据，且策略未能稳定转化为扣成本后的超额收益。
+
+## 快速运行
+
+```powershell
+cd D:\Desktop\Quant\quant_300316
+$env:PYTHONDONTWRITEBYTECODE='1'
+python -B -m unittest discover -s tests
+python -B -m src.report --config config.yaml
+python -B -m src.signal_generator --config config.yaml
+```
+
+最近一次验证：
+
+- `python -B -m unittest discover -s tests`：`Ran 6 tests ... OK`
+- `python -B -m src.report --config config.yaml`：成功生成全部报告
+- `python -B -m src.signal_generator --config config.yaml`：输出最新 `risk_off` 信号，仓位 `0.0`
 
 ## 目录
 
 ```text
 quant_300316/
-  README.md
-  requirements.txt
   config.yaml
   data/
     raw/
+      300316_daily.csv
+      index_template.csv
+      industry_template.csv
+      financial_template.csv
+      event_template.csv
+      peer_template.csv
     processed/
   src/
     data_adapter.py
@@ -27,134 +58,63 @@ quant_300316/
     signal_generator.py
     report.py
     utils.py
-  notebooks/
-    01_data_check.ipynb
-    02_factor_analysis.ipynb
-    03_model_training.ipynb
-    04_backtest_review.ipynb
   reports/
+    stock_research_report.md
     factor_report.md
+    factor_deep_dive_report.md
     model_report.md
     backtest_report.md
+    robustness_report.md
+    final_decision_report.md
     daily_signal_template.csv
+    trade_log.csv
+    metrics_summary.csv
+    equity_curve.png
   tests/
-    test_no_leakage.py
-    test_feature_shift.py
-    test_backtest_basic.py
-```
-
-## 快速运行
-
-当前默认使用上层目录已有的本地 CSV：
-
-```powershell
-cd D:\Desktop\Quant\quant_300316
-python -m src.report --config config.yaml
-```
-
-输出：
-
-- `reports/factor_report.md`
-- `reports/model_report.md`
-- `reports/backtest_report.md`
-- `reports/daily_signal_template.csv`
-- `reports/equity_curve.png`
-- `data/processed/*.csv`
-
-生成最新收盘后信号：
-
-```powershell
-python -m src.signal_generator --config config.yaml
-```
-
-运行测试：
-
-```powershell
-python -m unittest discover -s tests
 ```
 
 ## 数据接口
 
-`src/data_adapter.py` 提供统一接口：
+默认使用项目内本地 CSV：`data/raw/300316_daily.csv`。
 
-- `CSVDataAdapter`
-- `TushareAdapter`
-- `AKShareAdapter`
-- `EastmoneyAdapter`
+可选数据源和模板：
 
-默认 `config.yaml` 使用 CSV。若要接入 Tushare 或 AKShare，只需要修改：
+- 指数：`data/raw/index_template.csv`
+- 行业：`data/raw/industry_template.csv`
+- 财务：`data/raw/financial_template.csv`
+- 事件：`data/raw/event_template.csv`
+- 同行：`data/raw/peer_template.csv`
 
-```yaml
-data:
-  source: tushare
-```
+当前缺失且未纳入的数据：
 
-Tushare token 从环境变量读取：
+- 沪深300、中证500、创业板指
+- 申万或中信行业指数
+- 光伏、半导体设备、硅片、碳化硅、设备订单等主题/产业链数据
+- 财务公告日数据
+- 业绩预告、定期报告、解禁、分红、股权激励、重大订单等事件数据
+- 盘口、逐笔、真实停复牌和涨跌停可成交性数据
 
-```powershell
-$env:TUSHARE_TOKEN="your-token"
-```
+缺失数据不会被伪造，主流程会继续运行，并在报告中明确写明“缺失，因此未纳入”。
 
-财务数据必须包含 `ann_date` 或 `announcement_date`。系统使用 `merge_asof(..., direction="backward")` 按实际公告日对齐，禁止用报告期结束日提前泄漏。
+## 方法约束
 
-## 研究方法
+- 所有模型使用 walk-forward，不随机打乱时间序列。
+- 缺失值填充、标准化、特征筛选只在训练窗口 fit。
+- `y_*` 和 `future_*` 列被排除在特征列之外。
+- 财务数据必须按 `ann_date` 或 `announcement_date` 公告日对齐。
+- 全样本因子报告只用于研究解释，不用于事后选因子再回测。
+- 回测包含 commission、slippage、stamp tax，可配置 minimum fee。
+- 信号是概率、风险和仓位参考，不是确定性投资建议。
 
-标签：
+## 主要报告
 
-- `y_ret_1d/3d/5d/10d/20d`
-- `y_up_5d/20d`
-- `y_outperform_index_5d/20d`，在指数数据可用时生成
-- `future_mdd_5d/20d`、`future_vol_5d/20d`、`y_crash_5d/20d`
+- [股票画像](reports/stock_research_report.md)
+- [因子深挖](reports/factor_deep_dive_report.md)
+- [模型报告](reports/model_report.md)
+- [回测报告](reports/backtest_report.md)
+- [稳健性报告](reports/robustness_report.md)
+- [最终决策](reports/final_decision_report.md)
 
-候选因子：
+## 继续研究需要补充
 
-- 趋势/动量
-- 反转/超买超卖
-- 成交量/流动性
-- 波动率/风险
-- 相对强弱
-- 市场状态
-- 基本面公告日特征
-- 事件公告日特征
-
-模型：
-
-- 基线：买入持有、空仓、均线、动量
-- 核心样本外模型：Ridge 回归、Logistic 分类
-- scikit-learn 可用时可扩展 Ridge/Lasso/ElasticNet/RandomForest/Permutation Importance
-- 当前实现保留纯 numpy 降级模型，避免环境不能导入 sklearn 时研究闭环中断
-
-验证：
-
-- expanding walk-forward
-- purge/embargo
-- 训练窗口内特征选择
-- 标准化、缺失值填充只在训练集 fit
-- 不打乱时间序列
-
-## 交易信号
-
-`daily_signal_template.csv` 字段包括：
-
-- `date`
-- `close`
-- `pred_ret_5d`
-- `pred_ret_20d`
-- `prob_up_5d`
-- `prob_up_20d`
-- `risk_score`
-- `signal_score`
-- `signal_label`
-- `target_position`
-- `reason`
-- `risk_warning`
-
-`target_position` 是参数化仓位参考，不是确定性买卖指令。
-
-## 风险与局限
-
-- 单股票时间序列样本有限，容易受到阶段性行情影响。
-- 无行业指数、市场宽度、融资融券、北向资金、产业链价格等数据时，相关因子不会被伪造。
-- 本地 CSV 只能近似识别停牌和涨跌停，真实交易可成交性需要更细数据。
-- 日频回测未模拟盘口冲击、排队、部分成交和盘中止损。
-- 研究输出不构成投资建议。
+优先补齐创业板指/沪深300/中证500、行业指数、同行标的、财务公告日、事件公告日和产业链价格数据。只有在这些数据加入后仍能保持样本外稳定、扣成本超额收益和可控回撤，才有资格从 `C. 不可用` 升级到 `B. 仅供观察` 或 `A. 可进入纸面交易`。

@@ -140,6 +140,9 @@ def performance_metrics(
     ann_ret = annualized_return(equity, periods_per_year)
     ann_vol = float(returns.std(ddof=0) * math.sqrt(periods_per_year)) if len(returns) else np.nan
     sharpe = float(ann_ret / ann_vol) if ann_vol and np.isfinite(ann_vol) else np.nan
+    downside = returns[returns < 0]
+    downside_vol = float(downside.std(ddof=0) * math.sqrt(periods_per_year)) if len(downside) else np.nan
+    sortino = float(ann_ret / downside_vol) if downside_vol and np.isfinite(downside_vol) else np.nan
     mdd = max_drawdown(equity)
     calmar = float(ann_ret / abs(mdd)) if mdd and np.isfinite(mdd) and mdd < 0 else np.nan
 
@@ -161,12 +164,21 @@ def performance_metrics(
     losses = active[active < 0]
     win_rate = float(len(wins) / len(active)) if len(active) else np.nan
     profit_loss = float(wins.mean() / abs(losses.mean())) if len(wins) and len(losses) else np.nan
+    losing_streak = 0
+    max_losing_streak = 0
+    for value in active:
+        if value < 0:
+            losing_streak += 1
+            max_losing_streak = max(max_losing_streak, losing_streak)
+        else:
+            losing_streak = 0
 
     metrics = {
         "total_return": total_return,
         "annual_return": ann_ret,
         "annual_volatility": ann_vol,
         "sharpe": sharpe,
+        "sortino": sortino,
         "calmar": calmar,
         "max_drawdown": mdd,
         "win_rate": win_rate,
@@ -174,6 +186,8 @@ def performance_metrics(
         "trade_count": trade_count,
         "avg_holding_days": avg_holding_days,
         "turnover": turnover,
+        "single_period_max_loss": float(returns.min()) if len(returns) else np.nan,
+        "max_consecutive_losses": float(max_losing_streak),
     }
     if benchmark_returns is not None:
         aligned = pd.concat([returns, pd.Series(benchmark_returns)], axis=1).fillna(0.0)

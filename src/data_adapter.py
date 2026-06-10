@@ -46,6 +46,21 @@ class DataAdapter(ABC):
     ) -> pd.DataFrame:
         return pd.DataFrame()
 
+    def get_industry_daily(
+        self,
+        start: Optional[DateLike] = None,
+        end: Optional[DateLike] = None,
+    ) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def get_theme_daily(
+        self,
+        theme: str,
+        start: Optional[DateLike] = None,
+        end: Optional[DateLike] = None,
+    ) -> pd.DataFrame:
+        return pd.DataFrame()
+
     def get_fundamentals(
         self,
         symbol: str,
@@ -87,7 +102,9 @@ class CSVDataAdapter(DataAdapter):
         path = resolve_path(path_value, self.base_dir)
         if path is None or not path.exists():
             return pd.DataFrame()
-        return pd.read_csv(path)
+        data = pd.read_csv(path)
+        # Treat header-only template files as intentionally missing data.
+        return data if len(data) else pd.DataFrame(columns=data.columns)
 
     def get_stock_daily(
         self,
@@ -110,6 +127,24 @@ class CSVDataAdapter(DataAdapter):
     ) -> pd.DataFrame:
         paths = self.csv_config.get("index_daily_paths", {}) or {}
         data = self._read_csv(paths.get(symbol))
+        return clean_ohlcv(data, start=start, end=end) if not data.empty else data
+
+    def get_industry_daily(
+        self,
+        start: Optional[DateLike] = None,
+        end: Optional[DateLike] = None,
+    ) -> pd.DataFrame:
+        data = self._read_csv(self.csv_config.get("industry_daily_path"))
+        return clean_ohlcv(data, start=start, end=end) if not data.empty else data
+
+    def get_theme_daily(
+        self,
+        theme: str,
+        start: Optional[DateLike] = None,
+        end: Optional[DateLike] = None,
+    ) -> pd.DataFrame:
+        paths = self.csv_config.get("theme_daily_paths", {}) or {}
+        data = self._read_csv(paths.get(theme))
         return clean_ohlcv(data, start=start, end=end) if not data.empty else data
 
     def get_fundamentals(

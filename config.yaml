@@ -12,11 +12,23 @@ data:
   adjust: qfq
   csv:
     stock_daily_path: "data/raw/300316_daily.csv"
-    index_daily_paths: {}
+    index_daily_paths:
+      hs300:
+      zz500:
+      chinext:
     industry_daily_path:
+    theme_daily_paths:
+      photovoltaic:
+      semiconductor_equipment:
+      silicon_wafer:
+      sic:
+      equipment_orders:
     fundamentals_path:
     events_path:
-    peer_daily_paths: {}
+    peer_daily_paths:
+      peer_1:
+      peer_2:
+      peer_3:
   tushare:
     token_env: TUSHARE_TOKEN
   akshare:
@@ -26,13 +38,18 @@ labels:
   horizons: [1, 3, 5, 10, 20]
   primary_horizons: [5, 20]
   outperform_index: chinext
+  estimated_round_trip_cost: 0.0021
+  good_trade_return_5d: 0.02
+  good_trade_return_20d: 0.05
+  good_trade_mae_5d: -0.05
+  good_trade_mae_20d: -0.10
   crash_threshold_5d: -0.08
   crash_threshold_20d: -0.15
 
 features:
-  return_windows: [1, 3, 5, 10, 20, 60]
+  return_windows: [1, 3, 5, 10, 20, 60, 120]
   ma_windows: [5, 10, 20, 60, 120]
-  breakout_windows: [20, 60, 120]
+  breakout_windows: [20, 60, 120, 250]
   volatility_windows: [5, 10, 20, 60]
   volume_windows: [5, 20, 60]
   zscore_windows: [20, 60]
@@ -63,11 +80,13 @@ signal:
   max_position: 1.0
   entry_threshold: 0.56
   strong_entry_threshold: 0.62
+  watch_threshold: 0.52
   exit_threshold: 0.48
   min_expected_return_5d: 0.01
   min_expected_return_20d: 0.025
   risk_off_vol_20d: 0.045
   risk_off_drawdown_20d: -0.15
+  event_cooling_days: 5
   neutral_position: 0.0
 
 backtest:
@@ -75,6 +94,7 @@ backtest:
   commission: 0.0003
   stamp_tax: 0.001
   slippage: 0.0005
+  minimum_fee: 0.0
   max_position: 1.0
   stop_loss: 0.10
   trailing_stop: 0.15
@@ -86,3 +106,4 @@ backtest:
 reports:
   output_dir: reports
   processed_dir: data/processed
+  audit_note: "Second-stage research keeps missing external data explicit and does not upgrade conclusions without out-of-sample evidence."

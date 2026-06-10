@@ -9,7 +9,14 @@ from .utils import rank_corr
 
 
 def numeric_feature_columns(df: pd.DataFrame) -> List[str]:
-    return [c for c in df.columns if c != "date" and pd.api.types.is_numeric_dtype(df[c])]
+    blocked_prefixes = ("y_", "future_")
+    return [
+        c
+        for c in df.columns
+        if c != "date"
+        and not c.startswith(blocked_prefixes)
+        and pd.api.types.is_numeric_dtype(df[c])
+    ]
 
 
 def score_features_on_train(

@@ -65,6 +65,22 @@ def _downside_volatility(returns: pd.Series, window: int) -> pd.Series:
     return returns.where(returns < 0, 0.0).rolling(window).std(ddof=0)
 
 
+def _rolling_percentile(series: pd.Series, window: int) -> pd.Series:
+    def _pct(values: np.ndarray) -> float:
+        if np.isnan(values).any():
+            return np.nan
+        last = values[-1]
+        return float((values <= last).mean())
+
+    return series.rolling(window).apply(_pct, raw=True)
+
+
+def _consecutive_count(condition: pd.Series) -> pd.Series:
+    groups = condition.ne(condition.shift()).cumsum()
+    counts = condition.groupby(groups).cumcount() + 1
+    return counts.where(condition, 0).astype(float)
+
+
 def build_price_volume_features(
     prices: pd.DataFrame,
     return_windows: Iterable[int] = (1, 3, 5, 10, 20, 60),
@@ -89,12 +105,24 @@ def build_price_volume_features(
     for window in return_windows:
         features[f"ret_{window}d"] = close / close.shift(window) - 1.0
         features[f"log_ret_{window}d"] = np.log(close / close.shift(window))
+    if {5, 20}.issubset(set(return_windows)):
+        features["momentum_accel_5_20"] = features["ret_5d"] - features["ret_20d"] / 4.0
+    if {20, 60}.issubset(set(return_windows)):
+        features["momentum_accel_20_60"] = features["ret_20d"] - features["ret_60d"] / 3.0
 
     for window in ma_windows:
         ma = close.rolling(window).mean()
         features[f"ma_gap_{window}d"] = close / ma - 1.0
         features[f"ma_slope_{window}d"] = rolling_slope(ma, min(window, 20)) if window >= 5 else np.nan
         features[f"price_above_ma_{window}d"] = (close > ma).astype(float)
+    for left, right in ((5, 20), (10, 60), (20, 120)):
+        if left in ma_windows and right in ma_windows:
+            ma_left = close.rolling(left).mean()
+            ma_right = close.rolling(right).mean()
+            features[f"ma_alignment_{left}_{right}"] = (ma_left > ma_right).astype(float)
+    for window in (20, 60):
+        features[f"trend_consistency_{window}d"] = (ret > 0).rolling(window).mean()
+        features[f"trend_persistence_{window}d"] = ret.rolling(window).apply(lambda x: np.sign(x.sum()) * (np.abs(x).sum() > 0), raw=True)
 
     for window in breakout_windows:
         past_high = high.shift(1).rolling(window).max()
@@ -110,6 +138,10 @@ def build_price_volume_features(
     features["adx_14d"] = _adx(high, low, close, 14)
     features["rsi_6d"] = _rsi(close, 6)
     features["rsi_14d"] = _rsi(close, 14)
+    features["short_reversal_3d"] = -(close / close.shift(3) - 1.0)
+    features["short_reversal_5d"] = -(close / close.shift(5) - 1.0)
+    features["consecutive_up_days"] = _consecutive_count(ret > 0)
+    features["consecutive_down_days"] = _consecutive_count(ret < 0)
 
     ma20 = close.rolling(20).mean()
     std20 = close.rolling(20).std(ddof=0)
@@ -129,22 +161,43 @@ def build_price_volume_features(
     features["amount_chg_1d"] = amount.pct_change()
     features["amount_chg_5d"] = amount / amount.shift(5) - 1.0
     features["turnover_chg_1d"] = turnover.diff()
+    features["turnover_chg_5d"] = turnover - turnover.shift(5)
     features["turnover_ratio_20d"] = safe_divide(turnover, turnover.rolling(20).mean())
     features["volume_up_price_up"] = ((ret > 0) & (volume > volume.rolling(20).mean())).astype(float)
     features["volume_up_price_down"] = ((ret < 0) & (volume > volume.rolling(20).mean())).astype(float)
     features["shrink_pullback"] = ((ret < 0) & (volume < volume.rolling(20).mean())).astype(float)
+    features["volume_breakout_20d"] = ((close > high.shift(1).rolling(20).max()) & (volume > volume.rolling(20).mean() * 1.5)).astype(float)
+    features["high_volume_reversal"] = ((high / open_ - 1.0 > 0.04) & (close < open_) & (volume > volume.rolling(20).mean() * 1.5)).astype(float)
     features["price_volume_divergence_20d"] = ret.rolling(20).corr(volume.pct_change())
+    features["amihud_illiquidity_20d"] = safe_divide(ret.abs(), amount.replace(0, np.nan)).rolling(20).mean() * 1e8
 
     for window in volatility_windows:
         features[f"volatility_{window}d"] = log_ret.rolling(window).std(ddof=0)
+        features[f"realized_vol_{window}d"] = features[f"volatility_{window}d"]
         features[f"downside_vol_{window}d"] = _downside_volatility(log_ret, window)
         features[f"max_drawdown_{window}d"] = rolling_max_drawdown(close, window)
+        features[f"vol_percentile_{window}d_252d"] = _rolling_percentile(features[f"volatility_{window}d"], 252)
     features["atr_14d"] = _atr(high, low, close, 14)
     features["atr_pct_14d"] = safe_divide(features["atr_14d"], close)
     features["intraday_range"] = safe_divide(high - low, close)
     features["high_low_range_20d"] = safe_divide(high.rolling(20).max() - low.rolling(20).min(), close)
     features["intraday_strength"] = safe_divide(2.0 * close - high - low, high - low)
     features["kbar_body"] = safe_divide(close - open_, open_)
+    body_top = pd.concat([open_, close], axis=1).max(axis=1)
+    body_bottom = pd.concat([open_, close], axis=1).min(axis=1)
+    features["upper_shadow_pct"] = safe_divide(high - body_top, close)
+    features["lower_shadow_pct"] = safe_divide(body_bottom - low, close)
+    features["long_upper_shadow"] = (features["upper_shadow_pct"] > features["intraday_range"] * 0.45).astype(float)
+    features["long_lower_shadow"] = (features["lower_shadow_pct"] > features["intraday_range"] * 0.45).astype(float)
+    features["gap_return"] = open_ / close.shift(1) - 1.0
+    features["gap_abs"] = features["gap_return"].abs()
+    features["gap_risk_20d"] = (features["gap_abs"] > 0.03).rolling(20).mean()
+    limit_up = df.get("limit_up", pd.Series(False, index=df.index)).astype(float)
+    limit_down = df.get("limit_down", pd.Series(False, index=df.index)).astype(float)
+    suspended = df.get("is_suspended", pd.Series(False, index=df.index)).astype(float)
+    features["limit_up_20d_count"] = limit_up.rolling(20).sum()
+    features["limit_down_20d_count"] = limit_down.rolling(20).sum()
+    features["suspended_20d_count"] = suspended.rolling(20).sum()
     return features.replace([np.inf, -np.inf], np.nan)
 
 
@@ -169,6 +222,14 @@ def add_relative_strength_features(features: pd.DataFrame, prices: pd.DataFrame,
     features[f"amount_rs_{prefix}_20d"] = (stock_amount / stock_amount.shift(20) - 1.0) - (
         market_amount / market_amount.shift(20) - 1.0
     )
+    stock_daily = stock_close.pct_change()
+    market_daily = market_close.pct_change()
+    beta_60 = safe_divide(stock_daily.rolling(60).cov(market_daily), market_daily.rolling(60).var())
+    alpha_20 = stock_daily.rolling(20).mean() - beta_60 * market_daily.rolling(20).mean()
+    residual = stock_daily - beta_60 * market_daily
+    features[f"beta_{prefix}_60d"] = beta_60
+    features[f"alpha_{prefix}_20d"] = alpha_20
+    features[f"residual_momentum_{prefix}_20d"] = residual.rolling(20).sum()
     return features
 
 
@@ -184,8 +245,26 @@ def build_fundamental_features(aligned: pd.DataFrame) -> pd.DataFrame:
         result[f"fund_{col}"] = series
         event_values = series.where(change_mask)
         result[f"fund_{col}_chg"] = event_values.pct_change().ffill()
+    alias_pairs = {
+        "revenue_growth": ("revenue",),
+        "total_revenue_growth": ("total_revenue",),
+        "profit_growth": ("n_income_attr_p",),
+        "gross_margin_change": ("grossprofit_margin",),
+        "roe_change": ("roe",),
+        "asset_liab_ratio_change": ("asset_liab_ratio",),
+        "pe_change": ("pe",),
+        "pb_change": ("pb",),
+    }
+    for output, inputs in alias_pairs.items():
+        source = next((col for col in inputs if col in aligned.columns), None)
+        if source:
+            values = aligned[source].astype(float).where(change_mask)
+            result[f"fund_{output}"] = values.pct_change().ffill()
     if {"net_cash_flows_oper_act", "n_income_attr_p"}.issubset(aligned.columns):
         result["fund_ocf_to_profit"] = safe_divide(aligned["net_cash_flows_oper_act"], aligned["n_income_attr_p"])
+        result["fund_cash_quality_change"] = result["fund_ocf_to_profit"].where(change_mask).pct_change().ffill()
+    if {"market_cap", "n_income_attr_p"}.issubset(aligned.columns):
+        result["fund_profit_yield"] = safe_divide(aligned["n_income_attr_p"], aligned["market_cap"])
     if "ann_date" in aligned.columns:
         result["days_since_fin_report"] = (aligned["date"] - aligned["ann_date"]).dt.days
         for window in (5, 20):
@@ -215,6 +294,19 @@ def build_event_features(dates: pd.Series, events: Optional[pd.DataFrame]) -> pd
         features[f"days_since_{clean_type}"] = days
         for window in (5, 20):
             features[f"post_{clean_type}_{window}d"] = days.between(0, window).astype(float)
+        features[f"event_cooling_{clean_type}_risk"] = days.between(0, 5).astype(float)
+    event_dates = event_df[["event_date"]].drop_duplicates().sort_values("event_date")
+    event_dates["last_any_event_date"] = event_dates["event_date"]
+    aligned_any = pd.merge_asof(
+        pd.DataFrame({"date": pd.to_datetime(dates)}).sort_values("date"),
+        event_dates,
+        left_on="date",
+        right_on="event_date",
+        direction="backward",
+    )
+    days_any = (aligned_any["date"] - aligned_any["last_any_event_date"]).dt.days
+    features["days_since_any_event"] = days_any
+    features["event_cooling_any_risk"] = days_any.between(0, 5).astype(float)
     return features
 
 
