@@ -1,0 +1,88 @@
+project:
+  name: quant_300316
+  symbol: 300316.SZ
+  stock_name: 晶盛机电
+  frequency: daily
+  generated_after_close: true
+
+data:
+  source: csv
+  start_date: "2018-01-01"
+  end_date: "2026-06-09"
+  adjust: qfq
+  csv:
+    stock_daily_path: "data/raw/300316_daily.csv"
+    index_daily_paths: {}
+    industry_daily_path:
+    fundamentals_path:
+    events_path:
+    peer_daily_paths: {}
+  tushare:
+    token_env: TUSHARE_TOKEN
+  akshare:
+    enabled: false
+
+labels:
+  horizons: [1, 3, 5, 10, 20]
+  primary_horizons: [5, 20]
+  outperform_index: chinext
+  crash_threshold_5d: -0.08
+  crash_threshold_20d: -0.15
+
+features:
+  return_windows: [1, 3, 5, 10, 20, 60]
+  ma_windows: [5, 10, 20, 60, 120]
+  breakout_windows: [20, 60, 120]
+  volatility_windows: [5, 10, 20, 60]
+  volume_windows: [5, 20, 60]
+  zscore_windows: [20, 60]
+  factor_score_horizon: 5
+
+walk_forward:
+  min_train_size: 756
+  test_size: 63
+  purge: 20
+  embargo: 0
+  top_n_features: 40
+  max_feature_corr: 0.9
+  min_train_non_null: 252
+  random_state: 42
+
+models:
+  regression:
+    - ridge
+  classification:
+    - logistic
+  ridge_alpha: 10.0
+  logistic_l2: 1.0
+  logistic_lr: 0.05
+  logistic_iter: 700
+  use_sklearn_if_available: false
+
+signal:
+  max_position: 1.0
+  entry_threshold: 0.56
+  strong_entry_threshold: 0.62
+  exit_threshold: 0.48
+  min_expected_return_5d: 0.01
+  min_expected_return_20d: 0.025
+  risk_off_vol_20d: 0.045
+  risk_off_drawdown_20d: -0.15
+  neutral_position: 0.0
+
+backtest:
+  execution_price: next_open
+  commission: 0.0003
+  stamp_tax: 0.001
+  slippage: 0.0005
+  max_position: 1.0
+  stop_loss: 0.10
+  trailing_stop: 0.15
+  max_drawdown_limit: 0.25
+  max_holding_days: 60
+  assume_t_plus_1: true
+  limit_aware: true
+
+reports:
+  output_dir: reports
+  processed_dir: data/processed

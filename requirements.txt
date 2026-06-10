@@ -1,0 +1,12 @@
+pandas>=1.5
+numpy>=1.23
+matplotlib>=3.6
+PyYAML>=6.0
+statsmodels>=0.13
+scikit-learn>=1.0
+
+# Optional data/model extensions:
+# tushare
+# akshare
+# lightgbm
+# xgboost

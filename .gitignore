@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
+# Local secrets
+.env
+*.token
+
+# Runtime scratch files
+.tmp/
+tmp/
+temp/
+
+# Keep generated research outputs versioned for handoff.
+!reports/
+!data/processed/
