@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Optional
@@ -637,8 +638,12 @@ def run_research_pipeline(config_path: str = "config.yaml") -> Dict[str, pd.Data
         estimated_round_trip_cost=float(config.get("labels", {}).get("estimated_round_trip_cost", 0.0021)),
         good_trade_return_5d=float(config.get("labels", {}).get("good_trade_return_5d", 0.02)),
         good_trade_return_20d=float(config.get("labels", {}).get("good_trade_return_20d", 0.05)),
+        good_trade_return_60d=float(config.get("labels", {}).get("good_trade_return_60d", 0.12)),
         good_trade_mae_5d=float(config.get("labels", {}).get("good_trade_mae_5d", -0.05)),
         good_trade_mae_20d=float(config.get("labels", {}).get("good_trade_mae_20d", -0.10)),
+        good_trade_mae_60d=float(config.get("labels", {}).get("good_trade_mae_60d", -0.18)),
+        stop_loss_threshold=float(config.get("labels", {}).get("stop_loss_threshold", -0.10)),
+        take_profit_threshold=float(config.get("labels", {}).get("take_profit_threshold", 0.18)),
         crash_threshold_5d=float(config.get("labels", {}).get("crash_threshold_5d", -0.08)),
         crash_threshold_20d=float(config.get("labels", {}).get("crash_threshold_20d", -0.15)),
     )
@@ -738,7 +743,7 @@ def main() -> None:
     result = run_research_pipeline(args.config)
     print(result["latest_signal"].to_string(index=False))
     sys.stdout.flush()
-    raise SystemExit(0)
+    os._exit(0)
 
 
 if __name__ == "__main__":

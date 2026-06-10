@@ -1,0 +1,13 @@
+﻿candidate,type,rank_ic,direction_accuracy,strategy_total_return,max_drawdown,adopt,reason
+prediction_h1,model_prediction,0.029457182293518784,0.48329448329448327,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+prediction_h3,model_prediction,0.08620566832997235,0.5089494163424124,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+prediction_h5,model_prediction,0.10045111078378981,0.5113016367887763,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+prediction_h10,model_prediction,0.15799902289601464,0.5453834115805947,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+prediction_h20,model_prediction,0.14385735385344456,0.5630914826498423,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+prediction_h60,model_prediction,0.14172123191644426,0.5822475570032574,,,False,prediction quality alone is insufficient; strategy conversion underperforms
+strategy,backtest_portfolio,,,-0.012210024042341505,-0.5254853445614596,False,baseline comparison
+strategy_before_cost,backtest_portfolio,,,0.14472236288836315,-0.4803508210296693,False,baseline comparison
+buy_hold_300316,backtest_portfolio,,,2.3114754098360817,-0.7470559961547697,False,baseline comparison
+cash,backtest_portfolio,,,0.0,0.0,True,baseline comparison
+ma_60_120,trend_rule,,,2.7462396107266382,-0.5256581148145338,False,candidate trend module; requires robustness and paper-trading validation
+momentum_20,trend_rule,,,2.5335132546390984,-0.6487936472351455,False,candidate trend module; requires robustness and paper-trading validation

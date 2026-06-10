@@ -196,15 +196,30 @@ def latest_signal(signals: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> None:
     import argparse
+    import os
+    import sys
+    from pathlib import Path
 
     from .report import run_research_pipeline
+    from .utils import load_config, resolve_path
 
     parser = argparse.ArgumentParser(description="Generate 300316.SZ daily model signal.")
     parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--refresh", action="store_true", help="Re-run the full research pipeline before printing latest signal.")
     args = parser.parse_args()
-    result = run_research_pipeline(args.config)
-    latest = latest_signal(result["signals"])
+    config = load_config(args.config)
+    base = Path(config["_config_dir"])
+    report_dir = resolve_path(config.get("reports", {}).get("output_dir", "reports"), base)
+    signal_path = report_dir / "daily_signal_template.csv" if report_dir else None
+    if not args.refresh and signal_path is not None and signal_path.exists():
+        signals = pd.read_csv(signal_path)
+        latest = latest_signal(signals)
+    else:
+        result = run_research_pipeline(args.config)
+        latest = latest_signal(result["signals"])
     print(latest.to_string(index=False))
+    sys.stdout.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

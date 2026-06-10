@@ -192,7 +192,9 @@ def performance_metrics(
     if benchmark_returns is not None:
         aligned = pd.concat([returns, pd.Series(benchmark_returns)], axis=1).fillna(0.0)
         excess_equity = (1.0 + aligned.iloc[:, 0] - aligned.iloc[:, 1]).cumprod()
-        metrics["excess_total_return"] = float(excess_equity.iloc[-1] / excess_equity.iloc[0] - 1.0)
+        start = float(excess_equity.iloc[0]) if len(excess_equity) else np.nan
+        end = float(excess_equity.iloc[-1]) if len(excess_equity) else np.nan
+        metrics["excess_total_return"] = float(end / start - 1.0) if np.isfinite(start) and start != 0.0 else np.nan
     return metrics
 
 

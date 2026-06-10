@@ -1,0 +1,7 @@
+﻿hypothesis,available_factors,mean_abs_ic,best_factor,enter_model,reason
+H1 中期趋势有效,9,0.03910006558835916,adx_14d,True,candidate only; final selection remains walk-forward train-window only
+H2 高波动后风险加大,7,0.03773891691252338,gap_risk_20d,True,candidate only; final selection remains walk-forward train-window only
+H3 放量突破/缩量回调,4,0.04370583845804553,turnover_ratio_20d,True,candidate only; final selection remains walk-forward train-window only
+H4 相对强弱更重要,0,,,False,data unavailable or factors absent
+H5 财报周期影响趋势,0,,,False,data unavailable or factors absent
+H6 事件冷却期降仓,0,,,False,data unavailable or factors absent

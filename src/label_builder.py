@@ -50,14 +50,19 @@ def build_labels(
     estimated_round_trip_cost: float = 0.0021,
     good_trade_return_5d: float = 0.02,
     good_trade_return_20d: float = 0.05,
+    good_trade_return_60d: float = 0.12,
     good_trade_mae_5d: float = -0.05,
     good_trade_mae_20d: float = -0.10,
+    good_trade_mae_60d: float = -0.18,
+    stop_loss_threshold: float = -0.10,
+    take_profit_threshold: float = 0.18,
     crash_threshold_5d: float = -0.08,
     crash_threshold_20d: float = -0.15,
 ) -> pd.DataFrame:
     if prices.empty:
         raise ValueError("prices is empty.")
-    labels = pd.DataFrame({"date": prices["date"].values})
+    prices = prices.reset_index(drop=True)
+    label_data: dict[str, pd.Series | np.ndarray] = {"date": prices["date"].values}
     close = prices["close"].astype(float)
 
     benchmark_ret = {}
@@ -70,22 +75,28 @@ def build_labels(
 
     for horizon in horizons:
         future_ret = np.log(close.shift(-horizon) / close)
-        labels[f"y_ret_{horizon}d"] = future_ret
-        labels[f"y_up_{horizon}d"] = (future_ret > 0).astype(float)
-        labels[f"y_up_after_cost_{horizon}d"] = (future_ret > estimated_round_trip_cost).astype(float)
-        labels.loc[future_ret.isna(), f"y_up_{horizon}d"] = np.nan
-        labels.loc[future_ret.isna(), f"y_up_after_cost_{horizon}d"] = np.nan
-        labels[f"future_mdd_{horizon}d"] = _future_max_drawdown(close, horizon)
-        labels[f"future_vol_{horizon}d"] = _future_volatility(close, horizon)
+        y_up = (future_ret > 0).astype(float)
+        y_up_after_cost = (future_ret > estimated_round_trip_cost).astype(float)
+        y_up[future_ret.isna()] = np.nan
+        y_up_after_cost[future_ret.isna()] = np.nan
+        future_mdd = _future_max_drawdown(close, horizon)
+        future_vol = _future_volatility(close, horizon)
         mfe, mae = _future_mfe_mae(close, horizon)
-        labels[f"future_mfe_{horizon}d"] = mfe
-        labels[f"future_mae_{horizon}d"] = mae
+        label_data[f"y_ret_{horizon}d"] = future_ret
+        label_data[f"y_up_{horizon}d"] = y_up
+        label_data[f"y_up_after_cost_{horizon}d"] = y_up_after_cost
+        label_data[f"future_mdd_{horizon}d"] = future_mdd
+        label_data[f"future_vol_{horizon}d"] = future_vol
+        label_data[f"future_mfe_{horizon}d"] = mfe
+        label_data[f"future_mae_{horizon}d"] = mae
         if horizon in benchmark_ret:
             excess = future_ret - benchmark_ret[horizon]
-            labels[f"y_excess_ret_{horizon}d"] = excess
-            labels[f"y_outperform_index_{horizon}d"] = (excess > 0).astype(float)
-            labels.loc[future_ret.isna() | benchmark_ret[horizon].isna(), f"y_outperform_index_{horizon}d"] = np.nan
-            labels.loc[future_ret.isna() | benchmark_ret[horizon].isna(), f"y_excess_ret_{horizon}d"] = np.nan
+            outperform = (excess > 0).astype(float)
+            excess_missing = future_ret.isna() | benchmark_ret[horizon].isna()
+            outperform[excess_missing] = np.nan
+            excess[excess_missing] = np.nan
+            label_data[f"y_excess_ret_{horizon}d"] = excess
+            label_data[f"y_outperform_index_{horizon}d"] = outperform
 
         if horizon == 5:
             good_return = good_trade_return_5d
@@ -95,20 +106,45 @@ def build_labels(
             good_return = good_trade_return_20d
             good_mae = good_trade_mae_20d
             risk_threshold = crash_threshold_20d
+        elif horizon == 60:
+            good_return = good_trade_return_60d
+            good_mae = good_trade_mae_60d
+            risk_threshold = crash_threshold_20d * 1.5
         else:
             good_return = estimated_round_trip_cost
             good_mae = -abs(estimated_round_trip_cost) * 5.0
             risk_threshold = -abs(estimated_round_trip_cost) * 10.0
-        labels[f"y_good_trade_{horizon}d"] = ((future_ret > good_return) & (mae >= good_mae)).astype(float)
-        labels[f"y_risk_event_{horizon}d"] = ((labels[f"future_mdd_{horizon}d"] <= risk_threshold) | (labels[f"future_vol_{horizon}d"] > labels[f"future_vol_{horizon}d"].rolling(252, min_periods=60).quantile(0.8))).astype(float)
+        vol_threshold = future_vol.rolling(252, min_periods=60).quantile(0.8)
+        horizon_labels = {
+            f"y_good_trade_{horizon}d": ((future_ret > good_return) & (mae >= good_mae)).astype(float),
+            f"y_bad_trade_{horizon}d": ((future_ret < -estimated_round_trip_cost) | (mae <= risk_threshold)).astype(float),
+            f"y_trend_continue_{horizon}d": ((future_ret > good_return) & (mfe > abs(good_mae))).astype(float),
+            f"y_stop_loss_hit_{horizon}d": (mae <= stop_loss_threshold).astype(float),
+            f"y_take_profit_before_stop_{horizon}d": ((mfe >= take_profit_threshold) & (mae > stop_loss_threshold)).astype(float),
+            f"y_large_drawdown_{horizon}d": (future_mdd <= risk_threshold).astype(float),
+            f"y_high_vol_next_{horizon}d": (future_vol > vol_threshold).astype(float),
+            f"y_risk_event_{horizon}d": ((future_mdd <= risk_threshold) | (future_vol > vol_threshold)).astype(float),
+        }
+        if "limit_down" in prices.columns:
+            limit_down = prices["limit_down"].astype(float)
+            horizon_labels[f"y_limit_down_next_{horizon}d"] = limit_down.shift(-1).rolling(horizon).max().shift(-(horizon - 1))
+        if "is_suspended" in prices.columns:
+            suspended = prices["is_suspended"].astype(float)
+            horizon_labels[f"y_untradable_next_{horizon}d"] = suspended.shift(-1).rolling(horizon).max().shift(-(horizon - 1))
+        gap_down = (prices["open"].astype(float).shift(-1) / close - 1.0) <= -0.03
+        horizon_labels[f"y_gap_down_next_{horizon}d"] = gap_down.astype(float).shift(-1).rolling(horizon).max().shift(-(horizon - 1))
         missing = future_ret.isna() | mae.isna()
-        labels.loc[missing, f"y_good_trade_{horizon}d"] = np.nan
-        labels.loc[missing, f"y_risk_event_{horizon}d"] = np.nan
+        for col, values in horizon_labels.items():
+            values = values.astype(float)
+            values[missing] = np.nan
+            label_data[col] = values
 
-    if "future_mdd_5d" in labels.columns:
-        labels["y_crash_5d"] = (labels["future_mdd_5d"] <= crash_threshold_5d).astype(float)
-        labels.loc[labels["future_mdd_5d"].isna(), "y_crash_5d"] = np.nan
-    if "future_mdd_20d" in labels.columns:
-        labels["y_crash_20d"] = (labels["future_mdd_20d"] <= crash_threshold_20d).astype(float)
-        labels.loc[labels["future_mdd_20d"].isna(), "y_crash_20d"] = np.nan
-    return labels
+    if "future_mdd_5d" in label_data:
+        crash_5d = (label_data["future_mdd_5d"] <= crash_threshold_5d).astype(float)
+        crash_5d[label_data["future_mdd_5d"].isna()] = np.nan
+        label_data["y_crash_5d"] = crash_5d
+    if "future_mdd_20d" in label_data:
+        crash_20d = (label_data["future_mdd_20d"] <= crash_threshold_20d).astype(float)
+        crash_20d[label_data["future_mdd_20d"].isna()] = np.nan
+        label_data["y_crash_20d"] = crash_20d
+    return pd.DataFrame(label_data).copy()

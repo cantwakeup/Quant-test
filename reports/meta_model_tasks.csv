@@ -1,0 +1,4 @@
+﻿task,model,observations,brier,accuracy,positive_rate,adopt_as_primary,reason
+good_trade_20d,numpy_logistic_proxy,1268,0.32589500306090013,0.5513698630136986,0.35721343873517786,False,proxy probability does not yet beat simple trend rules consistently
+bad_trade_proxy_20d,numpy_logistic_proxy,1268,0.4317343899138483,0.43933463796477495,0.4209486166007905,False,proxy probability does not yet beat simple trend rules consistently
+up_after_cost_20d,numpy_logistic_proxy,1268,0.2924114956636609,0.5210371819960861,0.5163043478260869,False,proxy probability does not yet beat simple trend rules consistently

@@ -1,0 +1,7 @@
+﻿package,version,status
+python,3.9.0,available
+pandas,2.2.1,metadata_available
+numpy,1.26.4,metadata_available
+scikit-learn,1.5.2,metadata_available
+akshare,,missing
+tushare,,missing
